@@ -4,6 +4,8 @@ from sklearn import preprocessing
 from sklearn.cluster import KMeans
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score
+from sklearn.metrics import recall_score
 from sklearn.linear_model import LogisticRegression
 from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier
@@ -90,6 +92,8 @@ test_x = audio_test_x
 # train_x = img_train_x
 # test_x = img_test_x
 
+labs = img_train_y
+test_labs = img_test_y
 
 svm = SVC(gamma='auto')
 svm.fit(train_x, labs)
@@ -116,7 +120,7 @@ print(accuracy_score(labs, rf.predict(train_x)))
 print(accuracy_score(test_labs, rf.predict(test_x)))
 
 
-############################ AUDIO MLP MODEL ####################################
+########################### AUDIO MLP MODEL ####################################
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -197,6 +201,11 @@ for epoch in range(50):
             val_correct = 0
             val_total = 0
 
+            train_preds = []
+            train_gts = []
+            test_preds = []
+            test_gts = []
+
             for x, y in test_dataloader:
               # x = x.cuda()
               # y = y.cuda()
@@ -206,6 +215,9 @@ for epoch in range(50):
               _, predicted = torch.max(outputs.data, 1)
               val_total += y.size(0)
               val_correct += (predicted == y.long()).sum().item()
+
+              test_preds += list(predicted.cpu().detach().numpy())
+              test_gts += list(y.cpu().detach().numpy())
 
             for i, (x, y) in enumerate(train_dataloader):
               if(i == 50):
@@ -218,13 +230,22 @@ for epoch in range(50):
               _, predicted = torch.max(outputs.data, 1)
               train_total += y.size(0)
               train_correct += (predicted == y.long()).sum().item()
+
+              train_preds += list(predicted.cpu().detach().numpy())
+              train_gts += list(y.cpu().detach().numpy())              
               
+            train_precision = precision_score(train_gts, train_preds, average='micro')
+            train_recall = recall_score(train_gts, train_preds, average='micro')
+            test_precision = precision_score(test_gts, test_preds, average='micro')
+            test_recall = recall_score(test_gts, test_preds, average='micro')
+
             print('Epoch: '+str(epoch)+', Itr: '+str(itr)+', Loss: '+str(loss.item())+', Val acc: '+str(100 * val_correct/val_total)+', Train acc: '+str(100 * train_correct/train_total))
+            print('TrainP: '+str(train_precision)+', TrainR: '+str(train_recall)+', TestP: '+str(test_precision)+', TestR: '+str(test_recall))
             losses.append(loss.item())
             val_accs.append(100 * val_correct/val_total)
             train_accs.append(100 * train_correct/train_total)
-            scheduler.step(100 * val_correct/val_total)
-torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
+            # scheduler.step(100 * val_correct/val_total)
+# torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
 
 plt.figure()
 plt.plot(losses)
@@ -242,7 +263,7 @@ plt.ylabel('Accuracies')
 plt.legend(loc='best')
 plt.savefig('unimodal_audio_acc.png')
 
-# # ############################ IMAGE MLP MODEL ####################################
+# ############################ IMAGE MLP MODEL ####################################
 
 import torch.nn as nn
 import torch.nn.functional as F
@@ -325,6 +346,11 @@ for epoch in range(50):
             val_correct = 0
             val_total = 0
 
+            train_preds = []
+            train_gts = []
+            test_preds = []
+            test_gts = []            
+
             for x, y in test_dataloader:
               # x = x.cuda()
               # y = y.cuda()
@@ -334,6 +360,9 @@ for epoch in range(50):
               _, predicted = torch.max(outputs.data, 1)
               val_total += y.size(0)
               val_correct += (predicted == y.long()).sum().item()
+
+              test_gts += list(y.cpu().detach().numpy())
+              test_preds += list(predicted.cpu().detach().numpy())              
 
             for i, (x, y) in enumerate(train_dataloader):
               if(i == 50):
@@ -346,13 +375,22 @@ for epoch in range(50):
               _, predicted = torch.max(outputs.data, 1)
               train_total += y.size(0)
               train_correct += (predicted == y.long()).sum().item()
-              
+
+              train_gts += list(y.cpu().detach().numpy())
+              train_preds += list(predicted.cpu().detach().numpy())
+
+            train_precision = precision_score(train_gts, train_preds, average='micro')
+            train_recall = recall_score(train_gts, train_preds, average='micro')
+            test_precision = precision_score(test_gts, test_preds, average='micro')
+            test_recall = recall_score(test_gts, test_preds, average='micro')
+
             print('Epoch: '+str(epoch)+', Itr: '+str(itr)+', Loss: '+str(loss.item())+', Val acc: '+str(100 * val_correct/val_total)+', Train acc: '+str(100 * train_correct/train_total))
+            print('TrainP: '+str(train_precision)+', TrainR: '+str(train_recall)+', TestP: '+str(test_precision)+', TestR: '+str(test_recall))              
             losses.append(loss.item())
             val_accs.append(100 * val_correct/val_total)
             train_accs.append(100 * train_correct/train_total)
-            # scheduler.step(100 * val_correct/val_total)
-# torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
+#             # scheduler.step(100 * val_correct/val_total)
+torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
 
 plt.figure()
 plt.plot(losses)
@@ -370,7 +408,7 @@ plt.ylabel('Accuracies')
 plt.legend(loc='best')
 plt.savefig('unimodal_img_acc.png')
 
-################################ EARLY FUSION MODEL ####################################
+# ################################ EARLY FUSION MODEL ####################################
 
 class TextAndImageDataset(Dataset):
 	def __init__(self, data, labels):
@@ -473,6 +511,15 @@ for epoch in range(50):
             train_total_audio = 0
             val_correct_audio = 0
             val_total_audio = 0
+
+            img_train_preds = []
+            img_train_gts = []
+            img_test_preds = []
+            img_test_gts = []            
+            audio_train_preds = []
+            audio_train_gts = []
+            audio_test_preds = []
+            audio_test_gts = []                        
             
             for x, y in test_dataloader:
               # x = x.cuda()
@@ -487,6 +534,11 @@ for epoch in range(50):
               _, predicted_audio = torch.max(outputs_audio.data, 1)
               val_total_audio += y[1].size(0)
               val_correct_audio += (predicted_audio == y[1].long()).sum().item()
+
+              img_test_gts += list(y[0].cpu().detach().numpy())
+              img_test_preds += list(predicted_img.cpu().detach().numpy())              
+              audio_test_gts += list(y[1].cpu().detach().numpy())
+              audio_test_preds += list(predicted_audio.cpu().detach().numpy())
 
             for i, (x, y) in enumerate(train_dataloader):
               if(i == 50):
@@ -504,14 +556,30 @@ for epoch in range(50):
               train_total_audio += y[1].size(0)
               train_correct_audio += (predicted_audio == y[1].long()).sum().item()
 
+              img_train_gts += list(y[0].cpu().detach().numpy())
+              img_train_preds += list(predicted_img.cpu().detach().numpy())              
+              audio_train_gts += list(y[1].cpu().detach().numpy())
+              audio_train_preds += list(predicted_audio.cpu().detach().numpy())
+
+            img_train_precision = precision_score(img_train_gts, img_train_preds, average='micro')
+            img_train_recall = recall_score(img_train_gts, img_train_preds, average='micro')
+            img_test_precision = precision_score(img_test_gts, img_test_preds, average='micro')
+            img_test_recall = recall_score(img_test_gts, img_test_preds, average='micro')
+            audio_train_precision = precision_score(audio_train_gts, audio_train_preds, average='micro')
+            audio_train_recall = recall_score(audio_train_gts, audio_train_preds, average='micro')
+            audio_test_precision = precision_score(audio_test_gts, audio_test_preds, average='micro')
+            audio_test_recall = recall_score(audio_test_gts, audio_test_preds, average='micro')
+
             print('Epoch: '+str(epoch)+', Itr: '+str(itr)+', Loss: '+str(loss.item())+', Val img acc: '+str(100 * val_correct_img/val_total_img)+', Train img acc: '+str(100 * train_correct_img/train_total_img)+', Val audio acc: '+str(100 * val_correct_audio/val_total_audio)+', Train audio acc: '+str(100 * train_correct_audio/train_total_audio))
+            print('ImgTrainP: '+str(img_train_precision)+', ImgTrainR: '+str(img_train_recall)+', ImgTestP: '+str(img_test_precision)+', ImgTestR: '+str(img_test_recall))              
+            print('AudioTrainP: '+str(audio_train_precision)+', AudioTrainR: '+str(audio_train_recall)+', AudioTestP: '+str(audio_test_precision)+', AudioTestR: '+str(audio_test_recall))               
             losses.append(loss.item())
             audio_test_acc.append(100*val_correct_audio/val_total_audio)
             audio_train_acc.append(100*train_correct_audio/train_total_audio)
             img_test_acc.append(100*val_correct_img/val_total_img)
             img_train_acc.append(100*train_correct_img/train_total_img)   
             # scheduler.step(100 * val_correct/val_total)
-# torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
+torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
 
 plt.figure()
 plt.plot(losses)
@@ -686,6 +754,15 @@ for epoch in range(50):
             val_correct_audio = 0
             val_total_audio = 0
             
+            img_train_preds = []
+            img_train_gts = []
+            img_test_preds = []
+            img_test_gts = []            
+            audio_train_preds = []
+            audio_train_gts = []
+            audio_test_preds = []
+            audio_test_gts = []
+
             for x, y in test_dataloader:
               # x = x.cuda()
               # y = y.cuda()
@@ -699,6 +776,11 @@ for epoch in range(50):
               _, predicted_audio = torch.max(outputs_audio.data, 1)
               val_total_audio += y[1].size(0)
               val_correct_audio += (predicted_audio == y[1].long()).sum().item()
+
+              img_test_gts += list(y[0].cpu().detach().numpy())
+              img_test_preds += list(predicted_img.cpu().detach().numpy())              
+              audio_test_gts += list(y[1].cpu().detach().numpy())
+              audio_test_preds += list(predicted_audio.cpu().detach().numpy())
 
             for i, (x, y) in enumerate(train_dataloader):
               if(i == 50):
@@ -716,14 +798,30 @@ for epoch in range(50):
               train_total_audio += y[1].size(0)
               train_correct_audio += (predicted_audio == y[1].long()).sum().item()
 
+              img_train_gts += list(y[0].cpu().detach().numpy())
+              img_train_preds += list(predicted_img.cpu().detach().numpy())              
+              audio_train_gts += list(y[1].cpu().detach().numpy())
+              audio_train_preds += list(predicted_audio.cpu().detach().numpy())
+
+            img_train_precision = precision_score(img_train_gts, img_train_preds, average='micro')
+            img_train_recall = recall_score(img_train_gts, img_train_preds, average='micro')
+            img_test_precision = precision_score(img_test_gts, img_test_preds, average='micro')
+            img_test_recall = recall_score(img_test_gts, img_test_preds, average='micro')
+            audio_train_precision = precision_score(audio_train_gts, audio_train_preds, average='micro')
+            audio_train_recall = recall_score(audio_train_gts, audio_train_preds, average='micro')
+            audio_test_precision = precision_score(audio_test_gts, audio_test_preds, average='micro')
+            audio_test_recall = recall_score(audio_test_gts, audio_test_preds, average='micro')
+               
             print('Epoch: '+str(epoch)+', Itr: '+str(itr)+', Loss: '+str(loss.item())+', Val img acc: '+str(100 * val_correct_img/val_total_img)+', Train img acc: '+str(100 * train_correct_img/train_total_img)+', Val audio acc: '+str(100 * val_correct_audio/val_total_audio)+', Train audio acc: '+str(100 * train_correct_audio/train_total_audio))
+            print('ImgTrainP: '+str(img_train_precision)+', ImgTrainR: '+str(img_train_recall)+', ImgTestP: '+str(img_test_precision)+', ImgTestR: '+str(img_test_recall))              
+            print('AudioTrainP: '+str(audio_train_precision)+', AudioTrainR: '+str(audio_train_recall)+', AudioTestP: '+str(audio_test_precision)+', AudioTestR: '+str(audio_test_recall))
             losses.append(loss.item())
             audio_test_acc.append(100*val_correct_audio/val_total_audio)
             audio_train_acc.append(100*train_correct_audio/train_total_audio)
             img_test_acc.append(100*val_correct_img/val_total_img)
             img_train_acc.append(100*train_correct_img/train_total_img)   
             # scheduler.step(100 * val_correct/val_total)
-# torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
+torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
 
 plt.figure()
 plt.plot(losses)
@@ -889,6 +987,15 @@ for epoch in range(50):
             val_correct = 0
             val_total = 0
             
+            img_train_preds = []
+            img_train_gts = []
+            img_test_preds = []
+            img_test_gts = []            
+            audio_train_preds = []
+            audio_train_gts = []
+            audio_test_preds = []
+            audio_test_gts = []
+
             for x, y in test_dataloader:
               # x = x.cuda()
               # y = y.cuda()
@@ -898,6 +1005,11 @@ for epoch in range(50):
               _, predicted = torch.max(outputs.data, 1)
               val_total += y[0].size(0)
               val_correct += (predicted == y[0].long()).sum().item()
+
+              img_test_gts += list(y[0].cpu().detach().numpy())
+              img_test_preds += list(predicted_img.cpu().detach().numpy())              
+              audio_test_gts += list(y[1].cpu().detach().numpy())
+              audio_test_preds += list(predicted_audio.cpu().detach().numpy()) 
 
             for i, (x, y) in enumerate(train_dataloader):
               if(i == 50):
@@ -911,13 +1023,20 @@ for epoch in range(50):
               train_total += y[0].size(0)
               train_correct += (predicted == y[0].long()).sum().item()
 
+              img_train_gts += list(y[0].cpu().detach().numpy())
+              img_train_preds += list(predicted_img.cpu().detach().numpy())              
+              audio_train_gts += list(y[1].cpu().detach().numpy())
+              audio_train_preds += list(predicted_audio.cpu().detach().numpy())              
+
             print('Epoch: '+str(epoch)+', Itr: '+str(itr)+', Loss: '+str(loss.item())+', Val acc: '+str(100 * val_correct/val_total)+', Train acc: '+str(100 * train_correct/train_total))
+            print('ImgTrainP: '+str(img_train_precision)+', ImgTrainR: '+str(img_train_recall)+', ImgTestP: '+str(img_test_precision)+', ImgTestR: '+str(img_test_recall))              
+            print('AudioTrainP: '+str(audio_train_precision)+', AudioTrainR: '+str(audio_train_recall)+', AudioTestP: '+str(audio_test_precision)+', AudioTestR: '+str(audio_test_recall))
             losses.append(loss.item())
             test_acc.append(100*val_correct/val_total)
             train_acc.append(100*train_correct/train_total)
    
             # scheduler.step(100 * val_correct/val_total)
-# torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
+torch.save(model.state_dict(), 'model_concat_16384_dimensional.ckpt')
 
 plt.figure()
 plt.plot(losses)
