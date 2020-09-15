@@ -12,6 +12,10 @@ This repository contains code for training different uni-modal and multi-modal e
 ### MTL model
 ![MTL model](https://github.com/vishaal27/Multimodal-Video-Emotion-Recognition-Pytorch/blob/master/images/models/AFC_diag3.png)
 
+## Data
+
+All the required pickle files can be found here: https://drive.google.com/drive/folders/1x4rlJwvhYH_kxakuiX8s6iwQvnN_yfQa?usp=sharing.
+
 ## Results
 
 ### Baseline results
